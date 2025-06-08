@@ -94,33 +94,16 @@ const sensorDataSchema = new mongoose.Schema({
   temperature: { type: Number, required: true },
   humidity: { type: Number, required: true },
   airQuality: { type: Number, required: true },
-  airQualityLevel: { type: String, enum: ["Good", "Poor", "Danger"] },
+  airQualityLevel: {
+    type: String,
+    enum: ["Excellent", "Good", "Moderate", "Poor", "Danger"],
+  },
   timestamp: { type: Date, default: Date.now },
 });
 
 const User = mongoose.model("User", userSchema);
 const Device = mongoose.model("Device", deviceSchema);
 const SensorData = mongoose.model("SensorData", sensorDataSchema);
-
-const calculateAirQualityLevel = (temperature, humidity, airQuality) => {
-  let tempScore = 100;
-  if (temperature < 18 || temperature > 32) tempScore = 30;
-  else if (temperature < 20 || temperature > 30) tempScore = 70;
-
-  let humidityScore = 100;
-  if (humidity < 30 || humidity > 80) humidityScore = 30;
-  else if (humidity < 40 || humidity > 70) humidityScore = 70;
-
-  let aqScore = 100;
-  if (airQuality > 200) aqScore = 20;
-  else if (airQuality > 100) aqScore = 50;
-
-  const totalScore = aqScore * 0.6 + tempScore * 0.2 + humidityScore * 0.2;
-
-  if (totalScore >= 75) return "Good";
-  if (totalScore >= 45) return "Poor";
-  return "Danger";
-};
 
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers["authorization"];
@@ -405,13 +388,15 @@ app.post("/api/devices/auto-register", async (req, res) => {
 
 app.post("/api/data/sensor", async (req, res) => {
   try {
-    const { deviceId, temperature, humidity, airQuality } = req.body;
+    const { deviceId, temperature, humidity, airQuality, airQualityLevel } =
+      req.body;
 
     if (
       !deviceId ||
       temperature === undefined ||
       humidity === undefined ||
-      airQuality === undefined
+      airQuality === undefined ||
+      !airQualityLevel
     ) {
       return res.status(400).json({ error: "Missing required sensor data" });
     }
@@ -431,12 +416,6 @@ app.post("/api/data/sensor", async (req, res) => {
       );
     }
 
-    const airQualityLevel = calculateAirQualityLevel(
-      temperature,
-      humidity,
-      airQuality
-    );
-
     const sensorData = new SensorData({
       deviceId,
       temperature,
@@ -452,7 +431,6 @@ app.post("/api/data/sensor", async (req, res) => {
 
     res.json({
       message: "Data received successfully",
-      airQualityLevel,
       deviceCode: device.deviceCode,
     });
   } catch (error) {
@@ -605,7 +583,11 @@ app.get(
         totalDevices,
         activeDevices,
         airQualityStats: {
+          Excellent:
+            airQualityStats.find((s) => s._id === "Excellent")?.count || 0,
           Good: airQualityStats.find((s) => s._id === "Good")?.count || 0,
+          Moderate:
+            airQualityStats.find((s) => s._id === "Moderate")?.count || 0,
           Poor: airQualityStats.find((s) => s._id === "Poor")?.count || 0,
           Danger: airQualityStats.find((s) => s._id === "Danger")?.count || 0,
         },
